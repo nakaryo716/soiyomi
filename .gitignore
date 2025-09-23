@@ -1,0 +1,8 @@
+# builds
+/target
+
+# MacOS
+.DS_Store
+
+# secrets
+.env
