@@ -1,8 +1,10 @@
 use std::{env::current_dir, path::PathBuf, process::Command};
 
 use clipboard_stream::{ClipboardEventListener, Kind};
+use rodio::OutputStreamBuilder;
 use soiyomi::{
     audio_file_creator::{AudioCreate, AudioFileCreator},
+    audio_player::AudioPlayer,
     event_sender::EventSender,
 };
 use thiserror::Error;
@@ -15,7 +17,7 @@ fn main() {
 
     let mut event_sender = EventSender::new(clipboard_stream, text_tx);
 
-    let (tx, _rx) = std::sync::mpsc::channel();
+    let (tx, rx) = std::sync::mpsc::channel();
     let prosess = Prosess {
         prosess_cfg: ProsessConfig {
             path: "/Applications/voicepeak.app/Contents/MacOS/voicepeak".into(),
@@ -28,7 +30,15 @@ fn main() {
 
     std::thread::spawn(move || audio_file_creator.run());
 
-    let _ = futures::executor::block_on(event_sender.run());
+    std::thread::spawn(move || {
+        let _ = futures::executor::block_on(event_sender.run());
+    });
+
+    let stream = OutputStreamBuilder::open_default_stream().unwrap();
+    let mixer = stream.mixer();
+    let mut player = AudioPlayer::new(rx, mixer);
+    // this method blocking current thread
+    player.run();
 }
 
 pub struct Prosess {
@@ -44,7 +54,7 @@ impl AudioCreate for Prosess {
     type Error = MyErr;
 
     fn create(&mut self, text: impl Into<String>) -> Result<PathBuf, Self::Error> {
-        let file_name = format!("./test-{}.wav", self.count);
+        let file_name = format!("hello.wav");
         let mut child = Command::new(self.prosess_cfg.path.clone())
             .arg("-s")
             .arg(text.into())
@@ -69,7 +79,7 @@ impl AudioCreate for Prosess {
         a.push(c);
 
         self.count += 1;
-        Ok(a)
+        Ok("hello.wav".into())
     }
 }
 
